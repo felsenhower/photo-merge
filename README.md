@@ -38,12 +38,18 @@ $ tree /home/alice/spain_photos_merged
 
 With the command above, the subdirectories of `~/spain_photos_raw` are inspected and the JPEGs therein are hard-linked to `~/spain_photos_merged`. You can also choose to copy or symlink the photos instead.
 
+photo-merger also works with other kinds of files, although with a caveat: By default, we use [`exif`](https://pypi.org/project/exif/) which only supports JPEG and TIFF. If you have other files (e.g. RAW, MP4, MOV), you'll have to use the `--exiftool` option which uses `exiftool` via [`PyExifTool`](https://pypi.org/project/PyExifTool/) instead. This requires `exiftool` (the command-line tool) to be installed. Run the script like this:
+
+```shell
+$ uv run --extra exiftool main.py --exiftool ...
+```
+
 The datetimes that are used in the filenames are extracted from the EXIF data. By default, the datetimes are taken as-is. If you pass `--timezone=local`, your current timezone is used instead. If Alice has kept her camera's time to London time (`+01:00`), but Bob's smartphone automatically adjusted to Madrid time (`+02:00`), it makes sense to normalize the datetimes to Madrid time by passing `--timezone=Europe/Madrid`.
 
 ## Usage
 
 ```shell
-usage: photo-merge [-h] --source SOURCE --target TARGET --mode {copy,symlink,hardlink} [--timezone {none, local, <tz>}] [--normalize-extension]
+usage: photo-merge [-h] --source SOURCE --target TARGET --mode {copy,symlink,hardlink} [--timezone {none, local, <tz>}] [--normalize-extension] [--exiftool]
 
 Merge multiple photo directories.
 
@@ -58,5 +64,6 @@ options:
                         timezone identifiers, e.g. 'Europe/Berlin', 'CET', or 'UTC', and ISO 8601 offsets, e.g. '+01:00').
   --normalize-extension
                         Normalize file extensions. E.g. for all 'image/jpeg' files, '.jpg' is used.
+  --exiftool            Use exiftool backend instead (requires installing exiftool and running this script with '--extra exiftool').
 ```
 
