@@ -21,6 +21,7 @@ class CreateMode(StrEnum):
     COPY = "copy"
     SYMLINK = "symlink"
     HARDLINK = "hardlink"
+    DRYRUN = "dryrun"
 
 
 class TimeZoneModeBasic(StrEnum):
@@ -195,6 +196,8 @@ def make_target_path(
 
 def create_target_file(source_file: Path, target_file: Path, mode: CreateMode) -> None:
     print(f'"{source_file.name}" -> "{target_file.name}"')
+    if mode == CreateMode.DRYRUN:
+        return
     if target_file.exists():
         raise FileExistsError(f'Target file "{target_file}" exists.')
     match mode:

@@ -49,7 +49,7 @@ The datetimes that are used in the filenames are extracted from the EXIF data. B
 ## Usage
 
 ```shell
-usage: photo-merge [-h] --source SOURCE --target TARGET --mode {copy,symlink,hardlink} [--timezone {none, local, <tz>}] [--normalize-extension] [--exiftool]
+usage: photo-merge [-h] --source SOURCE --target TARGET --mode {copy,symlink,hardlink,dryrun} [--timezone {none, local, <tz>}] [--normalize-extension] [--exiftool]
 
 Merge multiple photo directories.
 
@@ -57,13 +57,13 @@ options:
   -h, --help            show this help message and exit
   --source SOURCE       Source directory to read from.
   --target TARGET       Target directory to write to.
-  --mode {copy,symlink,hardlink}
+  --mode {copy,symlink,hardlink,dryrun}
                         How to create the photos in the merged directory.
   --timezone {none, local, <tz>}
                         Timezone to use for the merged pictures (none: don't normalize datetimes; local: use local time; <tz>: Use a specific timezone. Supported values for tz are IANA
                         timezone identifiers, e.g. 'Europe/Berlin', 'CET', or 'UTC', and ISO 8601 offsets, e.g. '+01:00').
   --normalize-extension
                         Normalize file extensions. E.g. for all 'image/jpeg' files, '.jpg' is used.
-  --exiftool            Use exiftool backend instead (requires installing exiftool and running this script with '--extra exiftool').
+  --exiftool            Use exiftool backend instead (requires installing exiftool and running this script with '--extra exiftool')
 ```
 
