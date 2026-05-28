@@ -8,6 +8,13 @@ from typing import Union
 from zoneinfo import ZoneInfo
 
 import exif
+from plum.exceptions import (
+    ExcessMemoryError,
+    InsufficientMemoryError,
+    PackError,
+    SizeError,
+    UnpackError,
+)
 
 
 class CreateMode(StrEnum):
@@ -49,11 +56,6 @@ def time_zone_mode(s: str) -> TimeZoneMode:
     raise ValueError(f'Invalid timezone specifier "{s}".')
 
 
-def is_supported_filetype(p: Path) -> bool:
-    mimetype, _encoding = mimetypes.guess_file_type(p, strict=True)
-    return mimetype == "image/jpeg"
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="photo-merge", description="Merge multiple photo directories."
@@ -87,6 +89,11 @@ def parse_args() -> argparse.Namespace:
         default="none",
         help="Timezone to use for the merged pictures (none: don't normalize datetimes; local: use local time; <tz>: Use a specific timezone. Supported values for tz are IANA timezone identifiers, e.g. 'Europe/Berlin', 'CET', or 'UTC', and ISO 8601 offsets, e.g. '+01:00').",
     )
+    parser.add_argument(
+        "--normalize-extension",
+        action="store_true",
+        help="Normalize file extensions. E.g. for all 'image/jpeg' files, '.jpg' is used.",
+    )
     args = parser.parse_args()
     return args
 
@@ -97,15 +104,28 @@ def list_subdirs(p: Path) -> None:
         print(f'  "{subdir.name}"')
 
 
-def read_image_datetime(p: Path) -> datetime:
+def read_image_datetime(p: Path) -> datetime | None:
     assert p.exists()
     with p.open("rb") as f:
-        img = exif.Image(f)
-        assert img.has_exif
+        try:
+            img = exif.Image(f)
+        except (
+            ValueError,
+            ExcessMemoryError,
+            InsufficientMemoryError,
+            PackError,
+            SizeError,
+            UnpackError,
+        ):
+            return None
+        if not img.has_exif:
+            return None
         exif_datetime = img.get("datetime")
-        assert exif_datetime is not None
+        if exif_datetime is None:
+            return None
         exif_offset = img.get("offset_time")
-        assert exif_offset is not None
+        if exif_offset is None:
+            return None
         d = datetime.strptime(
             f"{exif_datetime} {exif_offset}", f"{exif.DATETIME_STR_FORMAT} %z"
         )
@@ -122,17 +142,28 @@ def normalize_datetime(d: datetime, tz_mode: TimeZoneMode) -> datetime:
             return d.astimezone(tz)
 
 
+def get_normalized_extension(p: Path) -> str | None:
+    mimetype, _encoding = mimetypes.guess_file_type(p, strict=True)
+    if mimetype is None:
+        return None
+    suffix = mimetypes.guess_extension(mimetype)
+    return suffix
+
+
 def make_target_path(
     source_filename: Path,
     image_datetime: datetime,
     tz_mode: TimeZoneMode,
     target_dir: Path,
+    do_normalize_extension: bool,
 ) -> Path:
     target_datetime = normalize_datetime(image_datetime, tz_mode)
     datetime_str = target_datetime.strftime("%Y-%m-%d %H-%M-%S")
-    suffix = "JPG"
+    suffix = source_filename.suffix
+    if do_normalize_extension:
+        suffix = get_normalized_extension(source_filename) or suffix
     stem = f"{datetime_str} ({source_filename.parent.name}, {source_filename.stem})"
-    return target_dir / f"{stem}.{suffix}"
+    return target_dir / f"{stem}{suffix}"
 
 
 def create_target_file(source_file: Path, target_file: Path, mode: CreateMode) -> None:
@@ -149,16 +180,24 @@ def create_target_file(source_file: Path, target_file: Path, mode: CreateMode) -
 
 
 def merge_photos(
-    source_dir: Path, target_dir: Path, mode: CreateMode, tz_mode: TimeZoneMode
+    source_dir: Path,
+    target_dir: Path,
+    mode: CreateMode,
+    tz_mode: TimeZoneMode,
+    do_normalize_extension: bool,
 ) -> None:
     for subdir in sorted(list(source_dir.iterdir())):
         print(f'Entering "{subdir.name}"...')
         for img_filename in sorted(list(subdir.iterdir())):
-            if not is_supported_filetype(img_filename):
-                continue
             image_datetime = read_image_datetime(img_filename)
+            if image_datetime is None:
+                continue
             target_path = make_target_path(
-                img_filename, image_datetime, tz_mode, target_dir
+                img_filename,
+                image_datetime,
+                tz_mode,
+                target_dir,
+                do_normalize_extension,
             )
             create_target_file(img_filename, target_path, mode)
 
@@ -168,7 +207,9 @@ def main() -> None:
     mimetypes.init()
     print(f'Reading from "{args.source}"')
     list_subdirs(args.source)
-    merge_photos(args.source, args.target, args.mode, args.timezone)
+    merge_photos(
+        args.source, args.target, args.mode, args.timezone, args.normalize_extension
+    )
 
 
 if __name__ == "__main__":
