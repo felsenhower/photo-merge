@@ -94,6 +94,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Normalize file extensions. E.g. for all 'image/jpeg' files, '.jpg' is used.",
     )
+    parser.add_argument(
+        "--exiftool",
+        action="store_true",
+        help="Use exiftool backend instead (requires installing exiftool and running this script with '--extra exiftool').",
+    )
     args = parser.parse_args()
     return args
 
@@ -104,8 +109,7 @@ def list_subdirs(p: Path) -> None:
         print(f'  "{subdir.name}"')
 
 
-def read_image_datetime(p: Path) -> datetime | None:
-    assert p.exists()
+def read_image_datetime_exif_default(p: Path) -> (str | None, str | None):
     with p.open("rb") as f:
         try:
             img = exif.Image(f)
@@ -117,19 +121,42 @@ def read_image_datetime(p: Path) -> datetime | None:
             SizeError,
             UnpackError,
         ):
-            return None
+            return (None, None)
         if not img.has_exif:
-            return None
+            return (None, None)
         exif_datetime = img.get("datetime")
-        if exif_datetime is None:
-            return None
         exif_offset = img.get("offset_time")
-        if exif_offset is None:
-            return None
-        d = datetime.strptime(
-            f"{exif_datetime} {exif_offset}", f"{exif.DATETIME_STR_FORMAT} %z"
-        )
-        return d
+        return (exif_datetime, exif_offset)
+
+
+def read_image_datetime_exif_exiftool(p: Path) -> (str | None, str | None):
+    import exiftool
+
+    with exiftool.ExifToolHelper() as et:
+        metadata = et.get_metadata(p)[0]
+        if "EXIF:CreateDate" in metadata:
+            exif_datetime = metadata["EXIF:CreateDate"]
+            exif_offset = metadata.get("EXIF:OffsetTime", None)
+            return (exif_datetime, exif_offset)
+        if "QuickTime:MediaCreateDate" in metadata:
+            exif_datetime = metadata["QuickTime:MediaCreateDate"]
+            exif_offset = "+00:00"
+            return (exif_datetime, exif_offset)
+        return (None, None)
+
+
+def read_image_datetime(p: Path, use_exiftool: bool) -> datetime | None:
+    assert p.exists()
+    if use_exiftool:
+        exif_datetime, exif_offset = read_image_datetime_exif_exiftool(p)
+    else:
+        exif_datetime, exif_offset = read_image_datetime_exif_default(p)
+    if exif_datetime is None or exif_offset is None:
+        return None
+    d = datetime.strptime(
+        f"{exif_datetime} {exif_offset}", f"{exif.DATETIME_STR_FORMAT} %z"
+    )
+    return d
 
 
 def normalize_datetime(d: datetime, tz_mode: TimeZoneMode) -> datetime:
@@ -185,11 +212,12 @@ def merge_photos(
     mode: CreateMode,
     tz_mode: TimeZoneMode,
     do_normalize_extension: bool,
+    use_exiftool: bool,
 ) -> None:
     for subdir in sorted(list(source_dir.iterdir())):
         print(f'Entering "{subdir.name}"...')
         for img_filename in sorted(list(subdir.iterdir())):
-            image_datetime = read_image_datetime(img_filename)
+            image_datetime = read_image_datetime(img_filename, use_exiftool)
             if image_datetime is None:
                 continue
             target_path = make_target_path(
@@ -208,7 +236,12 @@ def main() -> None:
     print(f'Reading from "{args.source}"')
     list_subdirs(args.source)
     merge_photos(
-        args.source, args.target, args.mode, args.timezone, args.normalize_extension
+        args.source,
+        args.target,
+        args.mode,
+        args.timezone,
+        args.normalize_extension,
+        args.exiftool,
     )
 
 
