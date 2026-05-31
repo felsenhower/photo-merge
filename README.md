@@ -50,6 +50,7 @@ The datetimes that are used in the filenames are extracted from the EXIF data. B
 
 ```shell
 usage: photo-merge [-h] --source SOURCE --target TARGET --mode {copy,symlink,hardlink,dryrun} [--timezone {none, local, <tz>}] [--normalize-extension] [--exiftool]
+                   [--name-format NAME_FORMAT]
 
 Merge multiple photo directories.
 
@@ -64,6 +65,9 @@ options:
                         timezone identifiers, e.g. 'Europe/Berlin', 'CET', or 'UTC', and ISO 8601 offsets, e.g. '+01:00').
   --normalize-extension
                         Normalize file extensions. E.g. for all 'image/jpeg' files, '.jpg' is used.
-  --exiftool            Use exiftool backend instead (requires installing exiftool and running this script with '--extra exiftool')
+  --exiftool            Use exiftool backend instead (requires installing exiftool and running this script with '--extra exiftool').
+  --name-format NAME_FORMAT
+                        Format string for target filenames. Default: '{date} {time} ({subdir}, {source_filename})'. Allowed keys are 'date' (ISO date), 'time' (ISO time), 'subdir' (the
+                        parent directory of the source file), 'source_filename' (the original filename of the source file, without extension), 'num' (a running number of the image).
 ```
 
