@@ -59,7 +59,8 @@ def time_zone_mode(s: str) -> TimeZoneMode:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog="photo-merge", description="Merge multiple photo directories."
+        prog="photo-merge",
+        description="Merge multiple photo directories.",
     )
     parser.register("type", "existing directory", existing_directory)
     parser.register("type", "mode", CreateMode)
@@ -99,6 +100,12 @@ def parse_args() -> argparse.Namespace:
         "--exiftool",
         action="store_true",
         help="Use exiftool backend instead (requires installing exiftool and running this script with '--extra exiftool').",
+    )
+    parser.add_argument(
+        "--name-format",
+        type=str,
+        default="{date} {time} ({subdir}, {source_filename})",
+        help="Format string for target filenames. Default: '{date} {time} ({subdir}, {source_filename})'. Allowed keys are 'date' (ISO date), 'time' (ISO time), 'subdir' (the parent directory of the source file), 'source_filename' (the original filename of the source file, without extension), 'num' (a running number of the image).",
     )
     args = parser.parse_args()
     return args
@@ -184,13 +191,22 @@ def make_target_path(
     tz_mode: TimeZoneMode,
     target_dir: Path,
     do_normalize_extension: bool,
+    name_format: str,
+    num: int,
 ) -> Path:
     target_datetime = normalize_datetime(image_datetime, tz_mode)
     datetime_str = target_datetime.strftime("%Y-%m-%d %H-%M-%S")
+    name_components = {
+        "date": target_datetime.strftime("%Y-%m-%d"),
+        "time": target_datetime.strftime("%H-%M-%S"),
+        "subdir": source_filename.parent.name,
+        "source_filename": source_filename.stem,
+        "num": num,
+    }
+    stem = name_format.format(**name_components)
     suffix = source_filename.suffix
     if do_normalize_extension:
         suffix = get_normalized_extension(source_filename) or suffix
-    stem = f"{datetime_str} ({source_filename.parent.name}, {source_filename.stem})"
     return target_dir / f"{stem}{suffix}"
 
 
@@ -216,10 +232,11 @@ def merge_photos(
     tz_mode: TimeZoneMode,
     do_normalize_extension: bool,
     use_exiftool: bool,
+    name_format: str,
 ) -> None:
     for subdir in sorted(list(source_dir.iterdir())):
         print(f'Entering "{subdir.name}"...')
-        for img_filename in sorted(list(subdir.iterdir())):
+        for num, img_filename in enumerate(sorted(list(subdir.iterdir()))):
             image_datetime = read_image_datetime(img_filename, use_exiftool)
             if image_datetime is None:
                 continue
@@ -229,6 +246,8 @@ def merge_photos(
                 tz_mode,
                 target_dir,
                 do_normalize_extension,
+                name_format,
+                num,
             )
             create_target_file(img_filename, target_path, mode)
 
@@ -245,6 +264,7 @@ def main() -> None:
         args.timezone,
         args.normalize_extension,
         args.exiftool,
+        args.name_format,
     )
 
 
