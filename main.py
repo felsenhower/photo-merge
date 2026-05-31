@@ -1,5 +1,6 @@
 import argparse
 import mimetypes
+import re
 import shutil
 from datetime import datetime, tzinfo
 from enum import StrEnum
@@ -57,6 +58,10 @@ def time_zone_mode(s: str) -> TimeZoneMode:
     raise ValueError(f'Invalid timezone specifier "{s}".')
 
 
+def regex(s: str) -> re.Pattern:
+    return re.compile(s)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="photo-merge",
@@ -65,16 +70,19 @@ def parse_args() -> argparse.Namespace:
     parser.register("type", "existing directory", existing_directory)
     parser.register("type", "mode", CreateMode)
     parser.register("type", "timezone", time_zone_mode)
+    parser.register("type", "regex", regex)
     parser.add_argument(
         "--source",
         required=True,
         type="existing directory",
+        metavar="DIR",
         help="Source directory to read from.",
     )
     parser.add_argument(
         "--target",
         required=True,
         type="existing directory",
+        metavar="DIR",
         help="Target directory to write to.",
     )
     parser.add_argument(
@@ -104,8 +112,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--name-format",
         type=str,
+        metavar="FORMAT_STR",
         default="{date} {time} ({subdir}, {source_filename})",
         help="Format string for target filenames. Default: '{date} {time} ({subdir}, {source_filename})'. Allowed keys are 'date' (ISO date), 'time' (ISO time), 'subdir' (the parent directory of the source file), 'source_filename' (the original filename of the source file, without extension), 'num' (a running number of the image).",
+    )
+    parser.add_argument(
+        "--ignore-existing",
+        action="store_true",
+        help="Skip existing files in target directory (default: exit with error).",
+    )
+    parser.add_argument(
+        "--match-path",
+        type="regex",
+        metavar="REGEX",
+        help="Only consider files where '<subdir>/<filename>' matches REGEX.",
     )
     args = parser.parse_args()
     return args
@@ -195,7 +215,6 @@ def make_target_path(
     num: int,
 ) -> Path:
     target_datetime = normalize_datetime(image_datetime, tz_mode)
-    datetime_str = target_datetime.strftime("%Y-%m-%d %H-%M-%S")
     name_components = {
         "date": target_datetime.strftime("%Y-%m-%d"),
         "time": target_datetime.strftime("%H-%M-%S"),
@@ -210,11 +229,15 @@ def make_target_path(
     return target_dir / f"{stem}{suffix}"
 
 
-def create_target_file(source_file: Path, target_file: Path, mode: CreateMode) -> None:
+def create_target_file(
+    source_file: Path, target_file: Path, mode: CreateMode, ignore_existing: bool
+) -> None:
     print(f'"{source_file.name}" -> "{target_file.name}"')
     if mode == CreateMode.DRYRUN:
         return
     if target_file.exists():
+        if ignore_existing:
+            return
         raise FileExistsError(f'Target file "{target_file}" exists.')
     match mode:
         case CreateMode.COPY:
@@ -233,10 +256,16 @@ def merge_photos(
     do_normalize_extension: bool,
     use_exiftool: bool,
     name_format: str,
+    ignore_existing: bool,
+    match_path: re.Pattern | None,
 ) -> None:
     for subdir in sorted(list(source_dir.iterdir())):
         print(f'Entering "{subdir.name}"...')
         for num, img_filename in enumerate(sorted(list(subdir.iterdir()))):
+            if match_path is not None:
+                if not match_path.match(str(img_filename.relative_to(source_dir))):
+                    print(f'Skipping "{img_filename}"')
+                    continue
             image_datetime = read_image_datetime(img_filename, use_exiftool)
             if image_datetime is None:
                 continue
@@ -249,7 +278,7 @@ def merge_photos(
                 name_format,
                 num,
             )
-            create_target_file(img_filename, target_path, mode)
+            create_target_file(img_filename, target_path, mode, ignore_existing)
 
 
 def main() -> None:
@@ -265,6 +294,8 @@ def main() -> None:
         args.normalize_extension,
         args.exiftool,
         args.name_format,
+        args.ignore_existing,
+        args.match_path,
     )
 
 

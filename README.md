@@ -48,16 +48,16 @@ The datetimes that are used in the filenames are extracted from the EXIF data. B
 
 ## Usage
 
-```shell
-usage: photo-merge [-h] --source SOURCE --target TARGET --mode {copy,symlink,hardlink,dryrun} [--timezone {none, local, <tz>}] [--normalize-extension] [--exiftool]
-                   [--name-format NAME_FORMAT]
+```
+usage: photo-merge [-h] --source DIR --target DIR --mode {copy,symlink,hardlink,dryrun} [--timezone {none, local, <tz>}] [--normalize-extension] [--exiftool] [--name-format FORMAT_STR]
+                   [--ignore-existing] [--match-path REGEX]
 
 Merge multiple photo directories.
 
 options:
   -h, --help            show this help message and exit
-  --source SOURCE       Source directory to read from.
-  --target TARGET       Target directory to write to.
+  --source DIR          Source directory to read from.
+  --target DIR          Target directory to write to.
   --mode {copy,symlink,hardlink,dryrun}
                         How to create the photos in the merged directory.
   --timezone {none, local, <tz>}
@@ -66,8 +66,10 @@ options:
   --normalize-extension
                         Normalize file extensions. E.g. for all 'image/jpeg' files, '.jpg' is used.
   --exiftool            Use exiftool backend instead (requires installing exiftool and running this script with '--extra exiftool').
-  --name-format NAME_FORMAT
+  --name-format FORMAT_STR
                         Format string for target filenames. Default: '{date} {time} ({subdir}, {source_filename})'. Allowed keys are 'date' (ISO date), 'time' (ISO time), 'subdir' (the
                         parent directory of the source file), 'source_filename' (the original filename of the source file, without extension), 'num' (a running number of the image).
+  --ignore-existing     Skip existing files in target directory (default: exit with error).
+  --match-path REGEX    Only consider files where '<subdir>/<filename>' matches REGEX.
 ```
 
